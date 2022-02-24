@@ -13,4 +13,9 @@ class Pajak extends Model
     {
         return $this->hasOne(ItemPajak::class,'pajak_id');
     }
+
+    public function item()
+    {
+        return $this->belongsToMany(Item::class,'item_pajaks');
+    }
 }

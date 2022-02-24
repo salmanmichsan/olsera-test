@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Validator;
 use App\Models\Item;
+use App\Models\Pajak;
 use App\Models\ItemPajak;
+use DB;
 
 class ItemController extends Controller
 {
@@ -16,13 +18,17 @@ class ItemController extends Controller
      */
     public function index()
     {
-        $result = Item::select('id','nama')->with(['pajak'])->get();
+        // $result = Item::select('id','nama')->with(['pajak'])->get();
         
-        return response()->json([
-            'status' => "1",
-            'message' => "Success!",
-            'data' => $result
-        ]);
+        $result = DB::select("select i.id ,i.`nama` ,json_array( (select GROUP_CONCAT( json_object('id',pajak_id,'nama',pajaks.nama,'rate',concat(pajaks.rate,'%')) ) from item_pajaks join pajaks on pajaks.id = item_pajaks.pajak_id where item_id = i.id)) as pajak from items i");
+        foreach($result as $a){
+            $b = json_decode($a->pajak,true);
+            $a->pajak = $b;
+            
+        }                
+        
+        return response()->json(["data"=>$result]);
+        
 
     }
 
@@ -48,18 +54,15 @@ class ItemController extends Controller
         if ($validator->fails()) {           
             return response()->json(['errors' => $validator->errors()]);
         }
-        // return $request;
+        
         try{
             $data = new Item;
             $data->nama = $request->nama;            
             $data->save();   
+
+            $pajak = Pajak::find($request->pajak);
+            $data->pajaks()->attach($pajak);
             
-            foreach($request->pajak as $a){
-                $dataDetail = new ItemPajak;
-                $dataDetail->item_id = $data->id;
-                $dataDetail->pajak_id = $a;
-                $dataDetail->save();
-            }
             return response()->json([
                 'status' => "1",
                 'message' => "Create Item Success!"
@@ -113,14 +116,16 @@ class ItemController extends Controller
             $data = Item::find($id);
             $data->nama = $request->nama;
             $data->update();
-            $detail = ItemPajak::where("item_id",$id);
-            $detail->delete();
-            foreach($request->pajak as $a){
-                $dataDetail = new ItemPajak;
-                $dataDetail->item_id = $data->id;
-                $dataDetail->pajak_id = $a;
-                $dataDetail->save();
-            }
+
+            $data->pajaks()->sync($request->pajak);
+            // $detail = ItemPajak::where("item_id",$id);
+            // $detail->delete();
+            // foreach($request->pajak as $a){
+            //     $dataDetail = new ItemPajak;
+            //     $dataDetail->item_id = $data->id;
+            //     $dataDetail->pajak_id = $a;
+            //     $dataDetail->save();
+            // }
             return response()->json([
                 'status' => "1",
                 'message' => "Update Item Success!"
@@ -142,7 +147,7 @@ class ItemController extends Controller
     public function destroy($id)
     {
         try{
-            $data = Item::find($id)->delete();
+            $data = Item::find($id)->delete();            
             return response()->json([
                 'status' => "1",
                 'message' => "Delete Item Success!"
